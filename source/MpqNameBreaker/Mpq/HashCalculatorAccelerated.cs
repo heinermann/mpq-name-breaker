@@ -96,9 +96,35 @@ namespace MpqNameBreaker.Mpq
             int typeA = 0x100; // Hash type A
             int typeB = 0x200; // Hash type B
 
+            // Suffix computation
             bool suffix = true;
             if( suffixBytes[0] == 0 )
                 suffix = false;
+
+            uint suffixBitTestMagic = 0;
+            if (suffixBytes.Length > 1)
+            {
+                suffixBitTestMagic = (hashALookup ^ suffixBytes[suffixBytes.Length-1]) - 3;
+                for (long i = 1; i < suffixBytes.Length; i++)
+                {
+                    ch = suffixBytes[suffixBytes.Length - 1 - i];
+                    if ((i % 3) != 0)
+                    {
+                        suffixBitTestMagic ^= ch;
+                    }
+
+                    if ((i % 3) != 1)
+                    {
+                        suffixBitTestMagic ^= cryptTable[typeA + ch];
+                    }
+                }
+
+                if ((suffixBytes.Length % 3) != 2)
+                {
+                    suffixBitTestMagic ^= 1;
+                }
+                suffixBitTestMagic &= 1;
+            }
 
             // Hash precalculated seeds (after prefix)
             uint[] precalcSeeds1 = new uint[8];
@@ -176,12 +202,30 @@ namespace MpqNameBreaker.Mpq
                 // Process suffix
                 if( suffix )
                 {
-                    for( int i = 0; i < suffixBytes.Length; ++i )
+                    if (suffixBytes.Length > 1)
+                    {
+                        long suffixModulo = suffixBytes.Length % 3;
+                        uint skipCmp = 0;
+
+                        if (suffixModulo != 2)
+                            skipCmp ^= s1;
+
+                        if (suffixModulo != 0)
+                            skipCmp ^= s2;
+
+                        if ((skipCmp & 1) != suffixBitTestMagic)
+                        {
+                            // couldn't think of a more elegant way to GTFO in this spaghetti
+                            goto SkipCheck;
+                        }
+                    }
+
+                    for (int i = 0; i < suffixBytes.Length; ++i)
                     {
                         // Retrieve current suffix char
                         ch = suffixBytes[i];
 
-                        // Hash calculation                    
+                        // Hash calculation
                         s1 = cryptTable[typeA + ch] ^ (s1 + s2);
                         s2 = ch + s1 + s2 + (s2 << 5) + 3;
                     }
@@ -233,6 +277,8 @@ namespace MpqNameBreaker.Mpq
                     }
 
                 }
+
+                @SkipCheck:
 
                 // Move to next name in the batch (brute force increment)
                 // If we are AT the last char of the charset
