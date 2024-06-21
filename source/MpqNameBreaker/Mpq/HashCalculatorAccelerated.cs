@@ -13,6 +13,7 @@ namespace MpqNameBreaker.Mpq
         public uint prefixSeed2b;    // Pre-computed hash B seed 2 for the string prefix
         public int batchCharCount;   // MAX = 8          // Number of generated chars in the batch
         public uint maxGeneratedChars;
+        public int hasSuffix;
 
         public override bool Equals(object obj)
         {
@@ -28,7 +29,8 @@ namespace MpqNameBreaker.Mpq
                    prefixSeed1b == other.prefixSeed1b &&
                    prefixSeed2b == other.prefixSeed2b &&
                    batchCharCount == other.batchCharCount &&
-                   maxGeneratedChars == other.maxGeneratedChars;
+                   maxGeneratedChars == other.maxGeneratedChars &&
+                   hasSuffix == other.hasSuffix;
         }
 
         public override int GetHashCode()
@@ -42,6 +44,7 @@ namespace MpqNameBreaker.Mpq
             hash.Add(prefixSeed2b);
             hash.Add(batchCharCount);
             hash.Add(maxGeneratedChars);
+            hash.Add(hasSuffix);
             return hash.ToHashCode();
         }
 
@@ -216,14 +219,17 @@ namespace MpqNameBreaker.Mpq
                 }
 
                 // Process suffix
-                for (int i = 0; i < suffixBytes.Length; ++i)
+                if (opt.Value.hasSuffix != 0)
                 {
-                    // Retrieve current suffix char
-                    uint ch = suffixBytes[i];
+                    for (int i = 0; i < suffixBytes.Length; ++i)
+                    {
+                        // Retrieve current suffix char
+                        uint ch = suffixBytes[i];
 
-                    // Hash calculation                    
-                    s1 = cryptTable[typeA + ch] ^ (s1 + s2);
-                    s2 = ch + s1 + s2 + (s2 << 5) + 3;
+                        // Hash calculation
+                        s1 = cryptTable[typeA + ch] ^ (s1 + s2);
+                        s2 = ch + s1 + s2 + (s2 << 5) + 3;
+                    }
                 }
 
                 // Check if it matches the hash that we are looking for
@@ -243,20 +249,23 @@ namespace MpqNameBreaker.Mpq
 
                         uint ch = charset[charsetIdx];
 
-                        // Hash calculation                    
+                        // Hash calculation
                         s1 = cryptTable[typeB + ch] ^ (s1 + s2);
                         s2 = ch + s1 + s2 + (s2 << 5) + 3;
                     }
 
                     // Process suffix
-                    for (int i = 0; i < suffixBytes.Length; ++i)
+                    if (opt.Value.hasSuffix != 0)
                     {
-                        // Retrieve current suffix char
-                        uint ch = suffixBytes[i];
+                        for (int i = 0; i < suffixBytes.Length; ++i)
+                        {
+                            // Retrieve current suffix char
+                            uint ch = suffixBytes[i];
 
-                        // Hash calculation                    
-                        s1 = cryptTable[typeB + ch] ^ (s1 + s2);
-                        s2 = ch + s1 + s2 + (s2 << 5) + 3;
+                            // Hash calculation
+                            s1 = cryptTable[typeB + ch] ^ (s1 + s2);
+                            s2 = ch + s1 + s2 + (s2 << 5) + 3;
+                        }
                     }
 
                     if (s1 == opt.Value.hashBLookup)

@@ -124,7 +124,17 @@ namespace MpqNameBreaker
 
         private byte[] GetSuffixBytes()
         {
-            return Encoding.ASCII.GetBytes(Suffix.ToUpper());
+            byte[] suffixBytes;
+            if (Suffix.Length > 0)
+            {
+                suffixBytes = Encoding.ASCII.GetBytes(Suffix.ToUpper());
+            }
+            else
+            {
+                suffixBytes = new byte[1];
+                suffixBytes[0] = 0x00;
+            }
+            return suffixBytes;
         }
 
         private void JobThread()
@@ -145,7 +155,8 @@ namespace MpqNameBreaker
 
             var charsetBuffer = Accelerator.Allocate1D(Batches.CharsetBytes);
             var charsetIndexesBuffer = Accelerator.Allocate2DDenseX<int>(new LongIndex2D(BatchSize, BruteForceBatches.MaxGeneratedChars));
-            var suffixBytesBuffer = Accelerator.Allocate1D(GetSuffixBytes());
+            var suffixBytes = GetSuffixBytes();
+            var suffixBytesBuffer = Accelerator.Allocate1D(suffixBytes);
             var cryptTableBuffer = Accelerator.Allocate1D(HashCalc.CryptTable);
             int nameCount = (int)Math.Pow(Batches.Charset.Length, BatchCharCount);
 
@@ -167,6 +178,7 @@ namespace MpqNameBreaker
             optimizableConstants.prefixSeed2b = PrefixSeed2B;
             optimizableConstants.batchCharCount = BatchCharCount;
             optimizableConstants.maxGeneratedChars = BruteForceBatches.MaxGeneratedChars;
+            optimizableConstants.hasSuffix = suffixBytes[0] != 0 ? 1 : 0;
 
             // MAIN
             Log($"Accelerator: {Accelerator.Name} (threads: {Accelerator.MaxNumThreads})");
