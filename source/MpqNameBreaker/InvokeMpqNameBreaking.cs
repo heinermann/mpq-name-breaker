@@ -1,8 +1,5 @@
-﻿using System;
-using MpqNameBreaker.NameGenerator;
+﻿using MpqNameBreaker.NameGenerator;
 using MpqNameBreaker.Mpq;
-using System.Collections.Generic;
-using System.Threading;
 using CommandLine;
 
 namespace MpqNameBreaker

@@ -1,7 +1,5 @@
 using ILGPU;
 using ILGPU.Runtime;
-using ILGPU.Runtime.Cuda;
-using ILGPU.Runtime.OpenCL;
 
 namespace MpqNameBreaker.Mpq
 {
@@ -60,8 +58,12 @@ namespace MpqNameBreaker.Mpq
                 // Notes: OptimizationLevel.O2 is actually really slow, not sure how to leverage it better if at all.
                 builder.Optimize(OptimizationLevel.O1)
                 .AllAccelerators()
-                .OpenCL()
-                .Cuda();
+#if DEBUG
+                .Assertions()
+                .AutoAssertions()
+                .Debug()
+#endif
+                ;
             });
         }
 
@@ -70,6 +72,8 @@ namespace MpqNameBreaker.Mpq
             return GPUContext.Devices.OrderByDescending(device => device.MaxNumThreads).First();
         }
 
+        // TODO: rewrite this entirely, since it has bugs that cause it to do extra work
+        // TODO: since that's on the table, add feature to only iterate between specific ranges
         public static void HashStringsBatchOptimized(
             Index1D index,
             ArrayView<byte> charset,                // 1D array holding the charset bytes
@@ -132,10 +136,9 @@ namespace MpqNameBreaker.Mpq
             }
 
             // Find the position of the last generated char
-            for (int i = 0; i < charsetIndexes.Extent.Y; ++i)
+            for (int i = 1; i < charsetIndexes.Extent.Y; ++i)
             {
-                Index2D idx = new Index2D(index.X, i);
-                if (charsetIndexes[idx] == -1)
+                if (charsetIndexes[index.X, i] == -1)
                 {
                     generatedCharIndex = i - 1;
                     break;
@@ -153,7 +156,7 @@ namespace MpqNameBreaker.Mpq
                 for (int i = precalcSeedIndex; i < charsetIndexes.Extent.Y; ++i)
                 {
                     // Retrieve the current char of the string
-                    Index1D charsetIdx = charsetIndexes[new Index2D(index.X, i)];
+                    Index1D charsetIdx = charsetIndexes[index.X, i];
 
                     if (charsetIdx == -1) // break if end of the string is reached
                         break;
@@ -198,7 +201,7 @@ namespace MpqNameBreaker.Mpq
                     for (int i = 0; i < charsetIndexes.Extent.Y; ++i)
                     {
                         // Retrieve the current char of the string
-                        Index1D charsetIdx = charsetIndexes[new Index2D(index.X, i)];
+                        Index1D charsetIdx = charsetIndexes[index.X, i];
 
                         if (charsetIdx == -1) // break if end of the string is reached
                             break;
@@ -228,7 +231,7 @@ namespace MpqNameBreaker.Mpq
                     {
                         // Populate foundNameCharsetIndexes and return
                         for (int i = 0; i < charsetIndexes.Extent.Y; ++i)
-                            foundNameCharsetIndexes[i] = charsetIndexes[new Index2D(index.X, i)];
+                            foundNameCharsetIndexes[i] = charsetIndexes[index.X, i];
 
                         return;
                     }
@@ -236,20 +239,26 @@ namespace MpqNameBreaker.Mpq
 
                 // Move to next name in the batch (brute force increment)
                 // If we are AT the last char of the charset
-                if (charsetIndexes[new Index2D(index.X, generatedCharIndex)] == charset.Length - 1)
+                if (charsetIndexes[index.X, generatedCharIndex] == charset.Length - 1)
                 {
                     bool increaseNameSize = false;
 
                     // Go through all the charset indexes in reverse order
                     int stopValue = generatedCharIndex - batchCharCount + 1;
-                    if (firstBatch != 0)
+                    if (firstBatch != 0 || stopValue < 0)
                         stopValue = 0;
 
                     for (int i = generatedCharIndex; i >= stopValue; --i)
                     {
                         // Retrieve the current char of the string
                         Index2D idx = new Index2D(index.X, i);
-
+                        /*
+                        if (idx.X >= charsetIndexes.Extent.X || idx.Y >= charsetIndexes.Extent.Y || idx.X < 0 || idx.Y < 0)
+                        {
+                            Interop.WriteLine("generatedCharIndex={0}; batchCharCount={1}; stopValue={2}", generatedCharIndex, batchCharCount, stopValue);
+                            Interop.WriteLine("idx: [{0}, {1}], charsetIndexes: [{2}, {3}]", idx.X, idx.Y, charsetIndexes.Extent.X, charsetIndexes.Extent.Y);
+                        }
+                        */
                         // If we are at the last char of the charset then go back to the first char
                         if (charsetIndexes[idx] == charset.Length - 1)
                         {
@@ -274,14 +283,14 @@ namespace MpqNameBreaker.Mpq
                     {
                         // Increase name size by one char
                         generatedCharIndex++;
-                        charsetIndexes[new Index2D(index.X, generatedCharIndex)] = 0;
+                        charsetIndexes[index.X, generatedCharIndex] = 0;
                     }
                 }
                 // If the generated char is within the charset
                 else
                 {
                     // Move to next char
-                    charsetIndexes[new Index2D(index.X, generatedCharIndex)]++;
+                    charsetIndexes[index.X, generatedCharIndex]++;
                 }
 
                 nameCount--;

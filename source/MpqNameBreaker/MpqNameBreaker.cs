@@ -6,6 +6,10 @@ namespace MpqNameBreaker
     {
         static int Main(string[] args)
         {
+#if DEBUG
+            Console.WriteLine("Attach debugger and press any key to continue...");
+            Console.ReadKey();
+#endif
             return Parser.Default.ParseArguments<GetAcceleratorCommand, GetMpqStringHashCommand, InvokeMpqNameBreakingCommand, InvokeMpqNameBreakingNonAcceleratedCommand>(args)
                 .MapResult(
                     (GetAcceleratorCommand opts) => GetAcceleratorCommand.ProcessRecord(opts),

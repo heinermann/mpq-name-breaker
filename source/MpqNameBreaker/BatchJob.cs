@@ -2,9 +2,7 @@
 using ILGPU.Runtime;
 using MpqNameBreaker.Mpq;
 using MpqNameBreaker.NameGenerator;
-using System;
 using System.Text;
-using System.Threading;
 
 namespace MpqNameBreaker
 {
@@ -162,7 +160,7 @@ namespace MpqNameBreaker
                 >(Mpq.HashCalculatorAccelerated.HashStringsBatchOptimized);
 
             var charsetBuffer = Accelerator.Allocate1D(Batches.CharsetBytes);
-            var charsetIndexesBuffer = Accelerator.Allocate2DDenseX<int>(new Index2D(BatchSize, BruteForceBatches.MaxGeneratedChars));
+            var charsetIndexesBuffer = Accelerator.Allocate2DDenseX<int>(new LongIndex2D(BatchSize, BruteForceBatches.MaxGeneratedChars));
             var suffixBytesBuffer = Accelerator.Allocate1D(GetSuffixBytes());
             var cryptTableBuffer = Accelerator.Allocate1D(HashCalc.CryptTable);
             int nameCount = (int)Math.Pow(Batches.Charset.Length, BatchCharCount);

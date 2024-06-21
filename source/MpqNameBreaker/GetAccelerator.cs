@@ -1,9 +1,5 @@
-﻿using System;
-using System.Linq;
-using CommandLine;
+﻿using CommandLine;
 using ILGPU;
-using ILGPU.Runtime.Cuda;
-using ILGPU.Runtime.OpenCL;
 
 namespace MpqNameBreaker
 {
@@ -15,9 +11,7 @@ namespace MpqNameBreaker
         {
             var context = Context.Create(builder =>
             {
-                builder.AllAccelerators()
-                .Cuda()
-                .OpenCL();
+                builder.AllAccelerators();
             });
 
             // For each available accelerator...
