@@ -124,17 +124,7 @@ namespace MpqNameBreaker
 
         private byte[] GetSuffixBytes()
         {
-            byte[] suffixBytes;
-            if (Suffix.Length > 0)
-            {
-                suffixBytes = Encoding.ASCII.GetBytes(Suffix.ToUpper());
-            }
-            else
-            {
-                suffixBytes = new byte[1];
-                suffixBytes[0] = 0x00;
-            }
-            return suffixBytes;
+            return Encoding.ASCII.GetBytes(Suffix.ToUpper());
         }
 
         private void JobThread()
@@ -143,20 +133,14 @@ namespace MpqNameBreaker
             // This function will calculate HashA for each name of a batch and report matches/collisions
             var kernel = Accelerator.LoadAutoGroupedStreamKernel<
                     Index1D,
-                    ArrayView<byte>,
-                    ArrayView<uint>,
-                    ArrayView2D<int, Stride2D.DenseX>,
-                    ArrayView<byte>,
-                    uint,
-                    uint,
-                    uint,
-                    uint,
-                    uint,
-                    uint,
-                    int,
-                    int,
-                    int,
-                    ArrayView<int>
+                    ArrayView<byte>,                            // 1D array holding the charset bytes
+                    ArrayView<uint>,                            // 1D array crypt table used for hash computation
+                    ArrayView2D<int, Stride2D.DenseX>,          // 2D array containing the char indexes of one batch string seed (one string per line, hashes will be computed starting from this string)
+                    ArrayView<byte>,                            // 1D array holding the indexes of the suffix chars
+                    SpecializedValue<AccelConstants>,           // Values that can be optimized
+                    SpecializedValue<int>,                      // boolean
+                    int,                                        // Name count limit (used as return condition)
+                    ArrayView<int>                              // 1D array containing the found name (if found)
                 >(Mpq.HashCalculatorAccelerated.HashStringsBatchOptimized);
 
             var charsetBuffer = Accelerator.Allocate1D(Batches.CharsetBytes);
@@ -174,6 +158,16 @@ namespace MpqNameBreaker
 
             var foundNameCharsetIndexesBuffer = Accelerator.Allocate1D(foundNameCharsetIndexes);
 
+            var optimizableConstants = new AccelConstants();
+            optimizableConstants.hashALookup = HashA;
+            optimizableConstants.hashBLookup = HashB;
+            optimizableConstants.prefixSeed1a = PrefixSeed1A;
+            optimizableConstants.prefixSeed2a = PrefixSeed2A;
+            optimizableConstants.prefixSeed1b = PrefixSeed1B;
+            optimizableConstants.prefixSeed2b = PrefixSeed2B;
+            optimizableConstants.batchCharCount = BatchCharCount;
+            optimizableConstants.maxGeneratedChars = BruteForceBatches.MaxGeneratedChars;
+
             // MAIN
             Log($"Accelerator: {Accelerator.Name} (threads: {Accelerator.MaxNumThreads})");
 
@@ -185,18 +179,12 @@ namespace MpqNameBreaker
                 // Call the kernel
                 kernel((int)charsetIndexesBuffer.Extent.X,
                        charsetBuffer.View,
-                       cryptTableBuffer.View,
+                       cryptTableBuffer.View,   // TODO make cryptTable static/immutable
                        charsetIndexesBuffer.View,
                        suffixBytesBuffer.View,
-                       HashA,
-                       HashB,
-                       PrefixSeed1A,
-                       PrefixSeed2A,
-                       PrefixSeed1B,
-                       PrefixSeed2B,
-                       batch.FirstBatch ? 0 : 1,
+                       SpecializedValue.New(optimizableConstants),
+                       SpecializedValue.New(batch.FirstBatch ? 1 : 0),
                        nameCount,
-                       BatchCharCount,
                        foundNameCharsetIndexesBuffer.View);
 
                 // Wait for the kernel to complete

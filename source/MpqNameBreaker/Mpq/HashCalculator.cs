@@ -28,16 +28,14 @@ namespace MpqNameBreaker.Mpq
         public void InitializeCryptTable()
         {
             uint seed = CryptTableSeed;
-            uint index1 = 0, index2 = 0;
-            uint i;
 
             // Create the array with the proper size
             CryptTable = new uint[CryptTableSize];
 
             // Go through all the cells of the array
-            for (index1 = 0; index1 < 0x100; index1++)
+            for (uint index1 = 0; index1 < 0x100; index1++)
             {
-                for (index2 = index1, i = 0; i < 5; i++, index2 += 0x100)
+                for (uint index2 = index1, i = 0; i < 5; i++, index2 += 0x100)
                 {
                     uint temp1, temp2;
 
@@ -56,13 +54,12 @@ namespace MpqNameBreaker.Mpq
         {
             uint seed1 = HashSeed1;
             uint seed2 = HashSeed2;
-            uint ch;
 
             int type = (int)hashType;
 
             for (int i = 0; i < str.Length; i++)
             {
-                ch = str[i];
+                uint ch = str[i];
                 seed1 = CryptTable[type + ch] ^ (seed1 + seed2);
                 seed2 = ch + seed1 + seed2 + (seed2 << 5) + 3;
             }
@@ -74,13 +71,12 @@ namespace MpqNameBreaker.Mpq
         {
             uint seed1 = HashSeed1;
             uint seed2 = HashSeed2;
-            uint ch;
 
             int type = (int)hashType;
 
             for (int i = 0; i < str.Length; i++)
             {
-                ch = str[i];
+                uint ch = str[i];
                 seed1 = CryptTable[type + ch] ^ (seed1 + seed2);
                 seed2 = ch + seed1 + seed2 + (seed2 << 5) + 3;
             }
@@ -91,13 +87,11 @@ namespace MpqNameBreaker.Mpq
         // Call HashStringOptimizedCalculateSeeds before this method
         public uint HashStringOptimized(byte[] str, HashType hashType, int prefixLength, uint seed1, uint seed2)
         {
-            uint ch;
-
             int type = (int)hashType;
 
             for (int i = prefixLength; i < str.Length; i++)
             {
-                ch = str[i];
+                uint ch = str[i];
                 seed1 = CryptTable[type + ch] ^ (seed1 + seed2);
                 seed2 = ch + seed1 + seed2 + (seed2 << 5) + 3;
             }
