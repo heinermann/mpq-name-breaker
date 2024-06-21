@@ -1,16 +1,18 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netstandard2.1</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <AssemblyName>MpqNameBreaker</AssemblyName>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <OutputType>Exe</OutputType>
+    <StartupObject>MpqNameBreaker.MpqNameBreaker</StartupObject>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="CommandLineParser" Version="2.9.1" />
     <PackageReference Include="ILGPU" Version="1.0.0" />
-    <PackageReference Include="PowerShellStandard.Library" Version="5.1.1">
-      <PrivateAssets>All</PrivateAssets>
-    </PackageReference>
   </ItemGroup>
 
 </Project>

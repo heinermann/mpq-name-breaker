@@ -155,7 +155,7 @@ namespace MpqNameBreaker
                     uint,
                     uint,
                     uint,
-                    bool,
+                    int,
                     int,
                     int,
                     ArrayView<int>
@@ -170,7 +170,9 @@ namespace MpqNameBreaker
             // fill result array with -1
             int[] foundNameCharsetIndexes = new int[BruteForceBatches.MaxGeneratedChars];
             for (int i = 0; i < BruteForceBatches.MaxGeneratedChars; ++i)
+            {
                 foundNameCharsetIndexes[i] = -1;
+            }
 
             var foundNameCharsetIndexesBuffer = Accelerator.Allocate1D(foundNameCharsetIndexes);
 
@@ -194,7 +196,7 @@ namespace MpqNameBreaker
                        PrefixSeed2A,
                        PrefixSeed1B,
                        PrefixSeed2B,
-                       batch.FirstBatch,
+                       batch.FirstBatch ? 0 : 1,
                        nameCount,
                        BatchCharCount,
                        foundNameCharsetIndexesBuffer.View);

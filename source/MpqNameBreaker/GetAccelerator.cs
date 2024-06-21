@@ -1,22 +1,17 @@
-﻿using System.Linq;
-using System.Management.Automation;
+﻿using System;
+using System.Linq;
+using CommandLine;
 using ILGPU;
 using ILGPU.Runtime.Cuda;
 using ILGPU.Runtime.OpenCL;
 
 namespace MpqNameBreaker
 {
-    [Cmdlet(VerbsCommon.Get, "Accelerator")]
-    [OutputType(typeof(uint))]
-    public class GetAcceleratorCommand : PSCmdlet
+    [Verb("Accelerator", HelpText = "Show supported accelerators.")]
+    public class GetAcceleratorCommand
     {
-        // This method gets called once for each cmdlet in the pipeline when the pipeline starts executing
-        protected override void BeginProcessing()
-        {
-        }
-
         // This method will be called for each input received from the pipeline to this cmdlet; if no input is received, this method is not called
-        protected override void ProcessRecord()
+        public static int ProcessRecord(GetAcceleratorCommand opts)
         {
             var context = Context.Create(builder =>
             {
@@ -26,12 +21,9 @@ namespace MpqNameBreaker
             });
 
             // For each available accelerator...
-            context.Devices.ToList().ForEach(WriteObject);
-        }
+            context.Devices.ToList().ForEach(Console.WriteLine);
 
-        // This method will be called once at the end of pipeline execution; if no input is received, this method is not called
-        protected override void EndProcessing()
-        {
+            return 0;
         }
     }
 }

@@ -1,94 +1,59 @@
 ﻿using System;
-using System.Text;
-using System.Management.Automation;
 using MpqNameBreaker.NameGenerator;
 using MpqNameBreaker.Mpq;
 using System.Collections.Generic;
 using System.Threading;
+using CommandLine;
 
 namespace MpqNameBreaker
 {
-    [Cmdlet(VerbsLifecycle.Invoke, "MpqNameBreaking")]
-    [OutputType(typeof(string))]
-    public class InvokeMpqNameBreakingCommand : PSCmdlet
+    [Verb("MpqNameBreaking", HelpText = "Runs accelerated (GPU) namebreaking.")]
+    public class InvokeMpqNameBreakingCommand
     {
-        [Parameter(
-            Mandatory = true,
-            Position = 0,
-            ValueFromPipelineByPropertyName = true)]
-        public uint HashA { get; set; }
+        [Option(Required = true)]
+        public string HashA { get; set; }
 
-        [Parameter(
-            Mandatory = true,
-            Position = 1,
-            ValueFromPipelineByPropertyName = true)]
-        public uint HashB { get; set; }
+        [Option(Required = true)]
+        public string HashB { get; set; }
 
-        [Parameter(
-            Mandatory = false,
-            Position = 2,
-            ValueFromPipelineByPropertyName = true)]
-        [AllowEmptyString()]
+        [Option(Default = "")]
         public string Prefix { get; set; } = "";
 
-        [Parameter(
-            Mandatory = false,
-            Position = 3,
-            ValueFromPipelineByPropertyName = true)]
-        [AllowEmptyString()]
+        [Option(Default = "")]
         public string Suffix { get; set; } = "";
 
-        [Parameter(
-            Mandatory = false,
-            Position = 3,
-            ValueFromPipelineByPropertyName = true)]
-        [AllowEmptyString()]
+        [Option(Default = "")]
         public string AdditionalChars { get; set; } = "";
 
-        [Parameter(
-            Mandatory = false,
-            Position = 3,
-            ValueFromPipelineByPropertyName = true)]
-        [AllowEmptyString()]
+        [Option(Default = BruteForceBatches.DefaultCharset)]
         public string Charset { get; set; } = BruteForceBatches.DefaultCharset;
 
-        [Parameter(
-            Mandatory = false,
-            Position = 1,
-            ValueFromPipelineByPropertyName = true)]
+        [Option(Default = -1)]
         public int BatchSize { get; set; }
 
-        [Parameter(
-            Mandatory = false,
-            Position = 1,
-            ValueFromPipelineByPropertyName = true)]
+        [Option(Default = -1)]
         public int BatchCharCount { get; set; }
 
         // Fields
-        private BruteForce _bruteForce;
-        private BruteForceBatches _bruteForceBatches;
-        private HashCalculator _hashCalculator;
-        private HashCalculatorAccelerated _hashCalculatorAccelerated;
-        private volatile bool nameFound = false;
-        private string resultName;
+        private static BruteForce _bruteForce;
+        private static BruteForceBatches _bruteForceBatches;
+        private static HashCalculator _hashCalculator;
+        private static HashCalculatorAccelerated _hashCalculatorAccelerated;
+        private static volatile bool nameFound = false;
+        private static string resultName;
 
-        // This method gets called once for each cmdlet in the pipeline when the pipeline starts executing
-        protected override void BeginProcessing()
+        private static void PrintDeviceInfo(HashCalculatorAccelerated hashCalc)
         {
-        }
-
-        private void PrintDeviceInfo(HashCalculatorAccelerated hashCalc)
-        {
-            WriteVerbose("Devices:");
+            Console.WriteLine("Devices:");
             foreach (var device in hashCalc.GPUContext)
             {
-                WriteVerbose($"\t{device}");
+                Console.WriteLine($"\t{device}");
             }
         }
 
-        private object logLock = new object();
-        private List<string> verboseLogBuffer = new List<string>();
-        private void WriteLogAsync(string text)
+        private static object logLock = new object();
+        private static List<string> verboseLogBuffer = new List<string>();
+        private static void WriteLogAsync(string text)
         {
             lock(logLock)
             {
@@ -96,8 +61,8 @@ namespace MpqNameBreaker
             }
         }
 
-        private object nameFoundLock = new object();
-        private void NameFoundAsync(string name)
+        private static object nameFoundLock = new object();
+        private static void NameFoundAsync(string name)
         {
             lock (nameFoundLock)
             {
@@ -107,43 +72,45 @@ namespace MpqNameBreaker
         }
 
         // This method will be called for each input received from the pipeline to this cmdlet; if no input is received, this method is not called
-        protected override void ProcessRecord()
+        public static int ProcessRecord(InvokeMpqNameBreakingCommand opts)
         {
             uint prefixSeed1A, prefixSeed2A, prefixSeed1B, prefixSeed2B;
 
             // Initialize brute force name generator
-            _bruteForce = new BruteForce(Prefix, Suffix);
+            _bruteForce = new BruteForce(opts.Prefix, opts.Suffix);
             _bruteForce.Initialize();
 
             // Initialize classic CPU hash calculator
             _hashCalculator = new HashCalculator();
 
             // Pre-calculate prefix seeds
-            (prefixSeed1A, prefixSeed2A, prefixSeed1B, prefixSeed2B) = PreCalculatePrefixSeeds(Prefix.Length);
+            (prefixSeed1A, prefixSeed2A, prefixSeed1B, prefixSeed2B) = PreCalculatePrefixSeeds(opts.Prefix.Length);
 
             // Initialize accelerated hash calculator
             _hashCalculatorAccelerated = new HashCalculatorAccelerated();
             PrintDeviceInfo(_hashCalculatorAccelerated);
 
             // Define the batch size to MaxNumThreads of the accelerator if no custom value has been provided
-            if (!this.MyInvocation.BoundParameters.ContainsKey("BatchSize"))
-                BatchSize = _hashCalculatorAccelerated.GetBestDevice().MaxNumThreads;
+            if (opts.BatchSize == -1)
+            {
+                opts.BatchSize = _hashCalculatorAccelerated.GetBestDevice().MaxNumThreads;
+            }
 
-            if (!this.MyInvocation.BoundParameters.ContainsKey("BatchCharCount"))
+            if (opts.BatchCharCount == -1)
             {
                 if (_hashCalculatorAccelerated.GetBestDevice().MaxNumThreads < 1024)
-                    BatchCharCount = 3;
+                    opts.BatchCharCount = 3;
                 else
-                    BatchCharCount = 4;
+                    opts.BatchCharCount = 4;
             }
 
             // Initialize brute force batches name generator
-            _bruteForceBatches = new BruteForceBatches(BatchSize, BatchCharCount, AdditionalChars, Charset);
+            _bruteForceBatches = new BruteForceBatches(opts.BatchSize, opts.BatchCharCount, opts.AdditionalChars, opts.Charset);
 
             _bruteForceBatches.Initialize();
 
             DateTime start = DateTime.Now;
-            WriteVerbose($"Start: {start:HH:mm:ss.fff}");
+            Console.WriteLine($"Start: {start:HH:mm:ss.fff}");
 
             var batches = new List<BatchJob>();
 
@@ -153,10 +120,10 @@ namespace MpqNameBreaker
                 if (device != _hashCalculatorAccelerated.GetBestDevice()) continue;
 
                 var job = new BatchJob(_hashCalculatorAccelerated.GPUContext, device, _bruteForceBatches, _hashCalculatorAccelerated) {
-                    Prefix = Prefix,
-                    Suffix = Suffix,
-                    HashA = HashA,
-                    HashB = HashB,
+                    Prefix = opts.Prefix,
+                    Suffix = opts.Suffix,
+                    HashA = Convert.ToUInt32(opts.HashA, 16),
+                    HashB = Convert.ToUInt32(opts.HashB, 16),
                     PrefixSeed1A = prefixSeed1A,
                     PrefixSeed1B = prefixSeed1B,
                     PrefixSeed2A = prefixSeed2A,
@@ -174,7 +141,7 @@ namespace MpqNameBreaker
                 {
                     foreach(string text in verboseLogBuffer)
                     {
-                        WriteVerbose(text);
+                        Console.WriteLine(text);
                     }
                     verboseLogBuffer.Clear();
                 }
@@ -186,18 +153,15 @@ namespace MpqNameBreaker
                 job.Stop();
             }
 
-            WriteVerbose($"End: {DateTime.Now:HH:mm:ss.fff}");
+            Console.WriteLine($"End: {DateTime.Now:HH:mm:ss.fff}");
             TimeSpan elapsed = DateTime.Now - start;
-            WriteVerbose($"Elapsed: {elapsed}");
-            WriteObject(resultName);
+            Console.WriteLine($"Elapsed: {elapsed}");
+            Console.WriteLine(resultName);
+
+            return 0;
         }
 
-        // This method will be called once at the end of pipeline execution; if no input is received, this method is not called
-        protected override void EndProcessing()
-        {
-        }
-
-        private (uint, uint, uint, uint) PreCalculatePrefixSeeds(int prefixLength)
+        private static (uint, uint, uint, uint) PreCalculatePrefixSeeds(int prefixLength)
         {
             uint prefixSeed1A, prefixSeed2A, prefixSeed1B, prefixSeed2B;
 
@@ -216,23 +180,6 @@ namespace MpqNameBreaker
             }
 
             return (prefixSeed1A, prefixSeed2A, prefixSeed1B, prefixSeed2B);
-        }
-
-        private byte[] InitializeSuffixData(string suffix)
-        {
-            byte[] suffixBytes;
-
-            if (suffix.Length > 0)
-            {
-                suffixBytes = Encoding.ASCII.GetBytes(Suffix.ToUpper());
-            }
-            else
-            {
-                suffixBytes = new byte[1];
-                suffixBytes[0] = 0x00;
-            }
-
-            return suffixBytes;            
         }
     }
 }

@@ -1,57 +1,37 @@
 ﻿using System;
-using System.Management.Automation;
 using MpqNameBreaker.NameGenerator;
 using MpqNameBreaker.Mpq;
+using CommandLine;
 
 namespace MpqNameBreaker
 {
-    [Cmdlet(VerbsLifecycle.Invoke, "MpqNameBreakingNonAccelerated")]
-    [OutputType(typeof(string))]
-    public class InvokeMpqNameBreakingNonAcceleratedCommand : PSCmdlet
+    [Verb("MpqNameBreakingNonAccelerated", HelpText = "Runs non-accelerated (CPU) namebreaking.")]
+    public class InvokeMpqNameBreakingNonAcceleratedCommand
     {
-        [Parameter(
-            Mandatory = true,
-            Position = 0,
-            ValueFromPipelineByPropertyName = true)]
-        public uint HashA { get; set; }
+        [Option(Required = true)]
+        public string HashA { get; set; }
 
-        [Parameter(
-            Mandatory = true,
-            Position = 1,
-            ValueFromPipelineByPropertyName = true)]
-        public uint HashB { get; set; }
+        [Option(Required = true)]
+        public string HashB { get; set; }
 
-        [Parameter(
-            Mandatory = true,
-            Position = 2,
-            ValueFromPipelineByPropertyName = true)]
-        [AllowEmptyString()]
-        public string Prefix { get; set; }
+        [Option(Default = "")]
+        public string Prefix { get; set; } = "";
 
-        [Parameter(
-            Mandatory = true,
-            Position = 3,
-            ValueFromPipelineByPropertyName = true)]
-        [AllowEmptyString()]
-        public string Suffix { get; set; }
+        [Option(Default = "")]
+        public string Suffix { get; set; } = "";
 
         // Fields
-        private BruteForce _bruteForce;
-        private HashCalculator _hashCalculator;
-
-        // This method gets called once for each cmdlet in the pipeline when the pipeline starts executing
-        protected override void BeginProcessing()
-        {
-        }
+        private static BruteForce _bruteForce;
+        private static HashCalculator _hashCalculator;
 
         // This method will be called for each input received from the pipeline to this cmdlet; if no input is received, this method is not called
-        protected override void ProcessRecord()
+        public static int ProcessRecord(InvokeMpqNameBreakingNonAcceleratedCommand opts)
         {
             uint prefixSeed1A, prefixSeed2A, prefixSeed1B, prefixSeed2B, currentHashA, currentHashB;
             DateTime start = DateTime.Now;
 
             // Initialize brute force name generator
-            _bruteForce = new BruteForce(Prefix, Suffix);
+            _bruteForce = new BruteForce(opts.Prefix, opts.Suffix);
             _bruteForce.Initialize();
 
             // Initialize hash calculator
@@ -60,7 +40,10 @@ namespace MpqNameBreaker
             (prefixSeed1A, prefixSeed2A) = _hashCalculator.HashStringOptimizedCalculateSeeds(_bruteForce.PrefixBytes, HashType.MpqHashNameA);
             (prefixSeed1B, prefixSeed2B) = _hashCalculator.HashStringOptimizedCalculateSeeds(_bruteForce.PrefixBytes, HashType.MpqHashNameB);
 
-            WriteVerbose(DateTime.Now.ToString("HH:mm:ss.fff"));
+            Console.WriteLine(DateTime.Now.ToString("HH:mm:ss.fff"));
+
+            uint hashValueA = Convert.ToUInt32(opts.HashA, 16);
+            uint hashValueB = Convert.ToUInt32(opts.HashB, 16);
 
             long count = 0;
             // 38^8 = 4_347_792_138_496
@@ -69,36 +52,29 @@ namespace MpqNameBreaker
                 //currentHash = _hashCalculator.HashString( _bruteForce.NameBytes, Type );
                 currentHashA = _hashCalculator.HashStringOptimized(_bruteForce.NameBytes, HashType.MpqHashNameA, _bruteForce.Prefix.Length, prefixSeed1A, prefixSeed2A);
 
-                if (HashA == currentHashA)
+                if (hashValueA == currentHashA)
                 {
                     currentHashB = _hashCalculator.HashStringOptimized(_bruteForce.NameBytes, HashType.MpqHashNameB, _bruteForce.Prefix.Length, prefixSeed1B, prefixSeed2B);
 
                     // Detect collisions
-                    if (HashB == currentHashB)
+                    if (hashValueB == currentHashB)
                     {
-                        WriteObject("Name found: " + _bruteForce.Name);
-                        WriteVerbose(DateTime.Now.ToString("HH:mm:ss.fff"));
+                        Console.WriteLine("Name found: " + _bruteForce.Name);
+                        Console.WriteLine(DateTime.Now.ToString("HH:mm:ss.fff"));
                         break;
-                    }
-                    else
-                    {
-                        WriteWarning("Hash A collision found on name: " + _bruteForce.Name);
                     }
                 }
 
                 if (count % 1_000_000_000 == 0)
                 {
                     TimeSpan elapsed = DateTime.Now - start;
-                    WriteVerbose(String.Format("Time: {0} - Name: {1} - Count : {2:N0} billion", elapsed.ToString(), _bruteForce.Name, count / 1_000_000_000));
+                    Console.WriteLine(string.Format("Time: {0} - Name: {1} - Count : {2:N0} billion", elapsed.ToString(), _bruteForce.Name, count / 1_000_000_000));
                 }
 
                 count++;
             }
-        }
 
-        // This method will be called once at the end of pipeline execution; if no input is received, this method is not called
-        protected override void EndProcessing()
-        {
+            return 0;
         }
     }
 }

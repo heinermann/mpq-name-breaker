@@ -2,7 +2,6 @@ using ILGPU;
 using ILGPU.Runtime;
 using ILGPU.Runtime.Cuda;
 using ILGPU.Runtime.OpenCL;
-using System.Linq;
 
 namespace MpqNameBreaker.Mpq
 {
@@ -83,7 +82,7 @@ namespace MpqNameBreaker.Mpq
             uint prefixSeed2a,                      // Pre-computed hash A seed 2 for the string prefix
             uint prefixSeed1b,                      // Pre-computed hash B seed 1 for the string prefix
             uint prefixSeed2b,                      // Pre-computed hash B seed 2 for the string prefix
-            bool firstBatch,
+            int firstBatch,                         // boolean
             int nameCount,                          // Name count limit (used as return condition)
             int batchCharCount, // MAX = 8          // Number of generated chars in the batch
             ArrayView<int> foundNameCharsetIndexes  // 1D array containing the found name (if found)
@@ -111,7 +110,7 @@ namespace MpqNameBreaker.Mpq
 
             // Brute force increment preparation
             // Increase name count to !numChars-1 for first batch first name seed
-            if (firstBatch && index == 0)
+            if (firstBatch != 0 && index == 0)
             {
                 nameCount = -1;
                 for (int i = 1; i <= batchCharCount; ++i)
@@ -243,7 +242,7 @@ namespace MpqNameBreaker.Mpq
 
                     // Go through all the charset indexes in reverse order
                     int stopValue = generatedCharIndex - batchCharCount + 1;
-                    if (firstBatch)
+                    if (firstBatch != 0)
                         stopValue = 0;
 
                     for (int i = generatedCharIndex; i >= stopValue; --i)
