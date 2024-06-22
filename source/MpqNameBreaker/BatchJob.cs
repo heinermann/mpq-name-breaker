@@ -180,7 +180,7 @@ namespace MpqNameBreaker
             optimizableConstants.prefixSeed2b = PrefixSeed2B;
             optimizableConstants.batchCharCount = BatchCharCount;
             optimizableConstants.maxGeneratedChars = BruteForceBatches.MaxGeneratedChars;
-            optimizableConstants.hasSuffix = suffixBytes[0] != 0 ? 1 : 0;
+            optimizableConstants.suffixbytes = suffixBytes[0] != 0 ? suffixBytes.Length : 0;
 
             // MAIN
             Log($"Accelerator: {Accelerator.Name} (threads: {Accelerator.MaxNumThreads})");
