@@ -144,21 +144,23 @@ namespace MpqNameBreaker
             var kernel = Accelerator.LoadAutoGroupedStreamKernel<
                     Index1D,
                     ArrayView<byte>,                            // 1D array holding the charset bytes
-                    ArrayView<uint>,                            // 1D array crypt table used for hash computation
                     ArrayView2D<int, Stride2D.DenseX>,          // 2D array containing the char indexes of one batch string seed (one string per line, hashes will be computed starting from this string)
                     ArrayView<byte>,                            // 1D array holding the indexes of the suffix chars
                     SpecializedValue<AccelConstants>,           // Values that can be optimized
                     SpecializedValue<int>,                      // boolean
                     int,                                        // Name count limit (used as return condition)
-                    ArrayView<int>                              // 1D array containing the found name (if found)
+                    ArrayView<int>,                              // 1D array containing the found name (if found)
+                    ArrayView<uint>,
+                    ArrayView<uint>
                 >(Mpq.HashCalculatorAccelerated.HashStringsBatchOptimized);
 
             var charsetBuffer = Accelerator.Allocate1D(Batches.CharsetBytes);
             var charsetIndexesBuffer = Accelerator.Allocate2DDenseX<int>(new LongIndex2D(BatchSize, BruteForceBatches.MaxGeneratedChars));
             var suffixBytes = GetSuffixBytes();
             var suffixBytesBuffer = Accelerator.Allocate1D(suffixBytes);
-            var cryptTableBuffer = Accelerator.Allocate1D(HashCalc.CryptTable);
             int nameCount = (int)Math.Pow(Batches.Charset.Length, BatchCharCount);
+            var cryptTableA = Accelerator.Allocate1D(StaticCryptTable.CryptTableA);
+            var cryptTableB = Accelerator.Allocate1D(StaticCryptTable.CryptTableB);
 
             // fill result array with -1
             int[] foundNameCharsetIndexes = new int[BruteForceBatches.MaxGeneratedChars];
@@ -191,13 +193,14 @@ namespace MpqNameBreaker
                 // Call the kernel
                 kernel((int)charsetIndexesBuffer.Extent.X,
                        charsetBuffer.View,
-                       cryptTableBuffer.View,   // TODO make cryptTable static/immutable
                        charsetIndexesBuffer.View,
                        suffixBytesBuffer.View,
                        SpecializedValue.New(optimizableConstants),
                        SpecializedValue.New(batch.FirstBatch ? 1 : 0),
                        nameCount,
-                       foundNameCharsetIndexesBuffer.View);
+                       foundNameCharsetIndexesBuffer.View,
+                       cryptTableA.View,
+                       cryptTableB.View);
 
                 // Wait for the kernel to complete
                 Accelerator.Synchronize();

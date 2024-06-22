@@ -62,46 +62,18 @@ namespace MpqNameBreaker.Mpq
     public class HashCalculatorAccelerated
     {
         // Constants
-        public const uint CryptTableSize = 0x500;
-        public const uint CryptTableSeed = 0x00100001;
+        //public const uint CryptTableSize = 0x500;
+        //public const uint CryptTableSeed = 0x00100001;
         public const uint HashSeed1 = 0x7FED7FED;
         public const uint HashSeed2 = 0xEEEEEEEE;
 
-        // Properties
-        public uint[] CryptTable { get; private set; }
 
         public Context GPUContext { get; private set; }
 
         // Constructors
         public HashCalculatorAccelerated()
         {
-            InitializeCryptTable();
             InitializeGpuContext();
-        }
-
-        // Methods
-        public void InitializeCryptTable()
-        {
-            uint seed = CryptTableSeed;
-
-            // Create the array with the proper size
-            CryptTable = new uint[CryptTableSize];
-            // Go through all the cells of the array
-            for (uint index1 = 0; index1 < 0x100; index1++)
-            {
-                for (uint index2 = index1, i = 0; i < 5; i++, index2 += 0x100)
-                {
-                    uint temp1, temp2;
-
-                    seed = ((seed * 125) + 3) % 0x2AAAAB;
-                    temp1 = (seed & 0xFFFF) << 0x10;
-
-                    seed = ((seed * 125) + 3) % 0x2AAAAB;
-                    temp2 = (seed & 0xFFFF);
-
-                    CryptTable[index2] = (temp1 | temp2);
-                }
-            }
         }
 
         public void InitializeGpuContext()
@@ -131,21 +103,18 @@ namespace MpqNameBreaker.Mpq
         public static void HashStringsBatchOptimized(
             Index1D index,
             ArrayView<byte> charset,                // 1D array holding the charset bytes
-            ArrayView<uint> cryptTable,             // 1D array crypt table used for hash computation
             ArrayView2D<int, Stride2D.DenseX> charsetIndexes,        // 2D array containing the char indexes of one batch string seed (one string per line, hashes will be computed starting from this string)
             ArrayView<byte> suffixBytes,            // 1D array holding the indexes of the suffix chars
             SpecializedValue<AccelConstants> opt,   // Values that can be optimized
             SpecializedValue<int> firstBatch,       // boolean
             int nameCount,                          // Name count limit (used as return condition)
-            ArrayView<int> foundNameCharsetIndexes  // 1D array containing the found name (if found)
+            ArrayView<int> foundNameCharsetIndexes,  // 1D array containing the found name (if found)
+            ArrayView<uint> cryptTableA,
+            ArrayView<uint> cryptTableB
         )
         {
             // Brute force increment variables
             int generatedCharIndex = 0;
-
-            // Hash variables
-            const long typeA = 0x100; // Hash type A
-            const long typeB = 0x200; // Hash type B
 
             // Hash precalculated seeds (after prefix)
             uint[] precalcSeeds1 = new uint[8];
@@ -205,7 +174,7 @@ namespace MpqNameBreaker.Mpq
                     uint ch = charset[charsetIdx];
 
                     // Hash calculation
-                    s1 = cryptTable[typeA + ch] ^ (s1 + s2);
+                    s1 = cryptTableA[(long)ch] ^ (s1 + s2);
                     s2 = ch + s1 + s2 + (s2 << 5) + 3;
 
                     // Store precalc seeds except if we are at the last character of the string
@@ -227,7 +196,7 @@ namespace MpqNameBreaker.Mpq
                         uint ch = suffixBytes[i];
 
                         // Hash calculation
-                        s1 = cryptTable[typeA + ch] ^ (s1 + s2);
+                        s1 = cryptTableA[(long)ch] ^ (s1 + s2);
                         s2 = ch + s1 + s2 + (s2 << 5) + 3;
                     }
                 }
@@ -250,7 +219,7 @@ namespace MpqNameBreaker.Mpq
                         uint ch = charset[charsetIdx];
 
                         // Hash calculation
-                        s1 = cryptTable[typeB + ch] ^ (s1 + s2);
+                        s1 = cryptTableB[(long)ch] ^ (s1 + s2);
                         s2 = ch + s1 + s2 + (s2 << 5) + 3;
                     }
 
@@ -263,7 +232,7 @@ namespace MpqNameBreaker.Mpq
                             uint ch = suffixBytes[i];
 
                             // Hash calculation
-                            s1 = cryptTable[typeB + ch] ^ (s1 + s2);
+                            s1 = cryptTableB[(long)ch] ^ (s1 + s2);
                             s2 = ch + s1 + s2 + (s2 << 5) + 3;
                         }
                     }
