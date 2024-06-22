@@ -50,7 +50,18 @@ namespace MpqNameBreaker
             thread = new Thread(() => JobThread());
 
             BatchSize = Accelerator.MaxNumThreads;
-            BatchCharCount = Accelerator.MaxNumThreads < 1024 ? 3 : 4;
+            if (Accelerator.MaxNumThreads < 1024)
+            {
+                BatchCharCount = 3;
+            }
+            else if (Accelerator.MaxNumThreads < 1024 * 32)
+            {
+                BatchCharCount = 4;
+            }
+            else
+            {
+                BatchCharCount = 5;
+            }
         }
 
         public void SetLoggerCallback(Action<string> logger)
@@ -152,7 +163,7 @@ namespace MpqNameBreaker
                     ArrayView<int>,                              // 1D array containing the found name (if found)
                     ArrayView<uint>,
                     ArrayView<uint>
-                >(Mpq.HashCalculatorAccelerated.HashStringsBatchOptimized);
+                >(HashCalculatorAccelerated.HashStringsBatchOptimized);
 
             var charsetBuffer = Accelerator.Allocate1D(Batches.CharsetBytes);
             var charsetIndexesBuffer = Accelerator.Allocate2DDenseX<int>(new LongIndex2D(BatchSize, BruteForceBatches.MaxGeneratedChars));
@@ -181,6 +192,13 @@ namespace MpqNameBreaker
             optimizableConstants.batchCharCount = BatchCharCount;
             optimizableConstants.maxGeneratedChars = BruteForceBatches.MaxGeneratedChars;
             optimizableConstants.suffixbytes = suffixBytes[0] != 0 ? suffixBytes.Length : 0;
+            optimizableConstants.charsetLength = Batches.CharsetBytes.Length;
+
+            if (optimizableConstants.suffixbytes > 0)
+            {
+                optimizableConstants.hashALookup ^= StaticCryptTable.CryptTableA[suffixBytes.Last()];
+                optimizableConstants.hashBLookup ^= StaticCryptTable.CryptTableB[suffixBytes.Last()];
+            }
 
             // MAIN
             Log($"Accelerator: {Accelerator.Name} (threads: {Accelerator.MaxNumThreads})");

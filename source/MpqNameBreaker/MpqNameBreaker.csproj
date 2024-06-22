@@ -8,6 +8,7 @@
     <StartupObject>MpqNameBreaker.MpqNameBreaker</StartupObject>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>disable</Nullable>
+    <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>

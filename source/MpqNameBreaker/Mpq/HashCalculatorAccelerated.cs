@@ -14,6 +14,7 @@ namespace MpqNameBreaker.Mpq
         public int batchCharCount;   // MAX = 8          // Number of generated chars in the batch
         public uint maxGeneratedChars;
         public int suffixbytes;
+        public int charsetLength;
 
         public override bool Equals(object obj)
         {
@@ -30,7 +31,8 @@ namespace MpqNameBreaker.Mpq
                    prefixSeed2b == other.prefixSeed2b &&
                    batchCharCount == other.batchCharCount &&
                    maxGeneratedChars == other.maxGeneratedChars &&
-                   suffixbytes == other.suffixbytes;
+                   suffixbytes == other.suffixbytes &&
+                   charsetLength == other.charsetLength;
         }
 
         public override int GetHashCode()
@@ -45,6 +47,7 @@ namespace MpqNameBreaker.Mpq
             hash.Add(batchCharCount);
             hash.Add(maxGeneratedChars);
             hash.Add(suffixbytes);
+            hash.Add(charsetLength);
             return hash.ToHashCode();
         }
 
@@ -67,7 +70,6 @@ namespace MpqNameBreaker.Mpq
         public const uint HashSeed1 = 0x7FED7FED;
         public const uint HashSeed2 = 0xEEEEEEEE;
 
-
         public Context GPUContext { get; private set; }
 
         // Constructors
@@ -84,6 +86,7 @@ namespace MpqNameBreaker.Mpq
                 builder.Optimize(OptimizationLevel.O1)
                 .AllAccelerators()
                 .Arrays(ArrayMode.InlineMutableStaticArrays)
+                .Inlining(InliningMode.Aggressive)
 #if DEBUG
                 .Assertions()
                 .AutoAssertions()
@@ -102,12 +105,12 @@ namespace MpqNameBreaker.Mpq
         // TODO: since that's on the table, add feature to only iterate between specific ranges
         public static void HashStringsBatchOptimized(
             Index1D index,
-            ArrayView<byte> charset,                // 1D array holding the charset bytes
+            ArrayView<byte> charset,                 // 1D array holding the charset bytes
             ArrayView2D<int, Stride2D.DenseX> charsetIndexes,        // 2D array containing the char indexes of one batch string seed (one string per line, hashes will be computed starting from this string)
-            ArrayView<byte> suffixBytes,            // 1D array holding the indexes of the suffix chars
-            SpecializedValue<AccelConstants> opt,   // Values that can be optimized
-            SpecializedValue<int> firstBatch,       // boolean
-            int nameCount,                          // Name count limit (used as return condition)
+            ArrayView<byte> suffixBytes,             // 1D array holding the indexes of the suffix chars
+            SpecializedValue<AccelConstants> opt,    // Values that can be optimized
+            SpecializedValue<int> firstBatch,        // boolean
+            int nameCount,                           // Name count limit (used as return condition)
             ArrayView<int> foundNameCharsetIndexes,  // 1D array containing the found name (if found)
             ArrayView<uint> cryptTableA,
             ArrayView<uint> cryptTableB
@@ -132,14 +135,14 @@ namespace MpqNameBreaker.Mpq
                 {
                     int temp = 1;
                     for (int j = 0; j < i; j++)
-                        temp *= (int)charset.Length;
+                        temp *= opt.Value.charsetLength;
                     nameCount += temp;
 
                     if (i == opt.Value.batchCharCount)
                     {
                         temp = 1;
-                        for (int j = 0; j < i; j++)
-                            temp *= (int)charset.Length;
+                        for (int j = 0; j < opt.Value.batchCharCount; j++)
+                            temp *= opt.Value.charsetLength;
                         nameCount += temp;
                     }
                 }
@@ -188,14 +191,18 @@ namespace MpqNameBreaker.Mpq
                 }
 
                 // Process suffix
-                for (int i = 0; i < opt.Value.suffixbytes; ++i)
+                if (opt.Value.suffixbytes > 0)
                 {
-                    // Retrieve current suffix char
-                    uint ch = suffixBytes[i];
+                    for (int i = 0; i < opt.Value.suffixbytes - 1; ++i)
+                    {
+                        // Retrieve current suffix char
+                        uint ch = suffixBytes[i];
 
-                    // Hash calculation
-                    s1 = cryptTableA[(long)ch] ^ (s1 + s2);
-                    s2 = ch + s1 + s2 + (s2 << 5) + 3;
+                        // Hash calculation
+                        s1 = cryptTableA[(long)ch] ^ (s1 + s2);
+                        s2 = ch + s1 + s2 + (s2 << 5) + 3;
+                    }
+                    s1 += s2;
                 }
 
                 // Check if it matches the hash that we are looking for
@@ -221,14 +228,18 @@ namespace MpqNameBreaker.Mpq
                     }
 
                     // Process suffix
-                    for (int i = 0; i < opt.Value.suffixbytes; ++i)
+                    if (opt.Value.suffixbytes > 0)
                     {
-                        // Retrieve current suffix char
-                        uint ch = suffixBytes[i];
+                        for (int i = 0; i < opt.Value.suffixbytes - 1; ++i)
+                        {
+                            // Retrieve current suffix char
+                            uint ch = suffixBytes[i];
 
-                        // Hash calculation
-                        s1 = cryptTableB[(long)ch] ^ (s1 + s2);
-                        s2 = ch + s1 + s2 + (s2 << 5) + 3;
+                            // Hash calculation
+                            s1 = cryptTableB[(long)ch] ^ (s1 + s2);
+                            s2 = ch + s1 + s2 + (s2 << 5) + 3;
+                        }
+                        s1 += s2;
                     }
 
                     if (s1 == opt.Value.hashBLookup)
@@ -243,7 +254,7 @@ namespace MpqNameBreaker.Mpq
 
                 // Move to next name in the batch (brute force increment)
                 // If we are AT the last char of the charset
-                if (charsetIndexes[index.X, generatedCharIndex] == charset.Length - 1)
+                if (charsetIndexes[index.X, generatedCharIndex] == opt.Value.charsetLength - 1)
                 {
                     bool increaseNameSize = false;
 
@@ -258,7 +269,7 @@ namespace MpqNameBreaker.Mpq
                         Index2D idx = new Index2D(index.X, i);
 
                         // If we are at the last char of the charset then go back to the first char
-                        if (charsetIndexes[idx] == charset.Length - 1)
+                        if (charsetIndexes[idx] == opt.Value.charsetLength - 1)
                         {
                             charsetIndexes[idx] = 0;
 
