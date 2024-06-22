@@ -190,7 +190,6 @@ namespace MpqNameBreaker
             optimizableConstants.prefixSeed1b = PrefixSeed1B;
             optimizableConstants.prefixSeed2b = PrefixSeed2B;
             optimizableConstants.batchCharCount = BatchCharCount;
-            optimizableConstants.maxGeneratedChars = BruteForceBatches.MaxGeneratedChars;
             optimizableConstants.suffixbytes = suffixBytes[0] != 0 ? suffixBytes.Length : 0;
             optimizableConstants.charsetLength = Batches.CharsetBytes.Length;
 
