@@ -31,13 +31,19 @@ namespace MpqNameBreaker
         [Option(Default = -1)]
         public int BatchCharCount { get; set; }
 
+        [Option(Default = "")]
+        public string Before { get; set; } = "";
+
+        [Option(Default = "")]
+        public string After { get; set; } = "";
+
         // Fields
         private static BruteForce _bruteForce;
         private static BruteForceBatches _bruteForceBatches;
         private static HashCalculator _hashCalculator;
         private static HashCalculatorAccelerated _hashCalculatorAccelerated;
         private static volatile bool nameFound = false;
-        private static string resultName;
+        private static string resultName = "<NOT FOUND>";
 
         private static void PrintDeviceInfo(HashCalculatorAccelerated hashCalc)
         {
@@ -55,6 +61,18 @@ namespace MpqNameBreaker
             lock(logLock)
             {
                 verboseLogBuffer.Add(text);
+            }
+        }
+
+        private static void PrintLogToConsole()
+        {
+            lock (logLock)
+            {
+                foreach (string text in verboseLogBuffer)
+                {
+                    Console.WriteLine(text);
+                }
+                verboseLogBuffer.Clear();
             }
         }
 
@@ -119,6 +137,8 @@ namespace MpqNameBreaker
                 var job = new BatchJob(_hashCalculatorAccelerated.GPUContext, device, _bruteForceBatches, _hashCalculatorAccelerated) {
                     Prefix = opts.Prefix,
                     Suffix = opts.Suffix,
+                    Before = opts.Before,
+                    After = opts.After,
                     HashA = Convert.ToUInt32(opts.HashA, 16),
                     HashB = Convert.ToUInt32(opts.HashB, 16),
                     PrefixSeed1A = prefixSeed1A,
@@ -132,20 +152,14 @@ namespace MpqNameBreaker
                 job.Run();
             }
 
-            while (!nameFound)
+            while (!nameFound && batches.Any(job => job.IsRunning()))
             {
-                lock(logLock)
-                {
-                    foreach(string text in verboseLogBuffer)
-                    {
-                        Console.WriteLine(text);
-                    }
-                    verboseLogBuffer.Clear();
-                }
                 Thread.Sleep(100);
+                PrintLogToConsole();
             }
+            PrintLogToConsole();
 
-            foreach(BatchJob job in batches)
+            foreach (BatchJob job in batches)
             {
                 job.Stop();
             }

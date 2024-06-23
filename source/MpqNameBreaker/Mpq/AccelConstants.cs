@@ -11,6 +11,8 @@ namespace MpqNameBreaker.Mpq
         public uint prefixSeed2b;    // Pre-computed hash B seed 2 for the string prefix
         public int batchCharCount;   // MAX = 8          // Number of generated chars in the batch
         public int suffixbytes;
+        public int beforebytes;
+        public int afterbytes;
         public int charsetLength;
 
         public override bool Equals(object obj)
@@ -28,6 +30,8 @@ namespace MpqNameBreaker.Mpq
                    prefixSeed2b == other.prefixSeed2b &&
                    batchCharCount == other.batchCharCount &&
                    suffixbytes == other.suffixbytes &&
+                   beforebytes == other.beforebytes &&
+                   afterbytes == other.afterbytes &&
                    charsetLength == other.charsetLength;
         }
 
@@ -42,6 +46,8 @@ namespace MpqNameBreaker.Mpq
             hash.Add(prefixSeed2b);
             hash.Add(batchCharCount);
             hash.Add(suffixbytes);
+            hash.Add(beforebytes);
+            hash.Add(afterbytes);
             hash.Add(charsetLength);
             return hash.ToHashCode();
         }

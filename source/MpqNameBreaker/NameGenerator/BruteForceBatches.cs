@@ -84,9 +84,9 @@ namespace MpqNameBreaker.NameGenerator
         public bool NextBatchNameSeed()
         {
             if (!Initialized)
-                throw new System.InvalidOperationException("Batch not initialized");
+                throw new InvalidOperationException("Batch not initialized");
 
-            if (_generatedCharIndex == MaxGeneratedChars)
+            if (_generatedCharIndex >= MaxGeneratedChars)
                 return false;
 
             // If we are AT the last char of the charset
@@ -149,13 +149,17 @@ namespace MpqNameBreaker.NameGenerator
 
                     if (firstBatch == false || count > 0)
                     {
+                        if (_generatedCharIndex + 1 + BatchItemCharCount > MaxGeneratedChars)
+                        {
+                            return null;
+                        }
+
                         // Copy additional seed bytes to the 2D array
                         for (int j = _generatedCharIndex + 1; j < _generatedCharIndex + 1 + BatchItemCharCount; j++)
                         {
                             batchNameSeedCharsetIndexes[count, j] = 0;
                         }
                     }
-
 
                     count++;
                 }
@@ -170,7 +174,7 @@ namespace MpqNameBreaker.NameGenerator
             lock (batchLock)
             {
                 if (!Initialized)
-                    throw new System.InvalidOperationException("Batch not initialized");
+                    throw new InvalidOperationException("Batch not initialized");
 
                 Batch result = nextBatchTask.Result;
                 nextBatchTask = Task.Run(NextBatchAsync);

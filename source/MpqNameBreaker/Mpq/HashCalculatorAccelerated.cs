@@ -56,8 +56,6 @@ namespace MpqNameBreaker.Mpq
             return result;
         }
 
-        // TODO: rewrite this entirely, since it has bugs that cause it to do extra work
-        // TODO: since that's on the table, add feature to only iterate between specific ranges
         public static void HashStringsBatchOptimized(
             Index1D index,
             ArrayView<byte> charset,                 // 1D array holding the charset bytes
@@ -68,7 +66,9 @@ namespace MpqNameBreaker.Mpq
             int nameCount,                           // Name count limit (used as return condition)
             ArrayView<int> foundNameCharsetIndexes,  // 1D array containing the found name (if found)
             ArrayView<uint> cryptTableA,
-            ArrayView<uint> cryptTableB
+            ArrayView<uint> cryptTableB,
+            ArrayView<byte> beforeBytes,            // Before chars (for bounding)
+            ArrayView<byte> afterBytes              // After chars (for bounding)
         )
         {
             // Brute force increment variables

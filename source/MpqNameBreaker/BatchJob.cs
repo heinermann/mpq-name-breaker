@@ -23,6 +23,8 @@ namespace MpqNameBreaker
 
         public string Prefix { get; set; }
         public string Suffix { get; set; }
+        public string Before { get; set; }
+        public string After { get; set; }
 
         public uint HashA { get; set; }
         public uint HashB { get; set; }
@@ -133,19 +135,24 @@ namespace MpqNameBreaker
             endThread = true;
         }
 
-        private byte[] GetSuffixBytes()
+        public bool IsRunning()
         {
-            byte[] suffixBytes;
-            if (Suffix.Length > 0)
+            return thread.IsAlive;
+        }
+
+        static private byte[] GetStringBytes(string str)
+        {
+            byte[] result;
+            if (str.Length > 0)
             {
-                suffixBytes = Encoding.ASCII.GetBytes(Suffix.ToUpper());
+                result = Encoding.ASCII.GetBytes(str.ToUpper());
             }
             else
             {
-                suffixBytes = new byte[1];
-                suffixBytes[0] = 0x00;
+                result = new byte[1];
+                result[0] = 0x00;
             }
-            return suffixBytes;
+            return result;
         }
 
         private void JobThread()
@@ -160,18 +167,26 @@ namespace MpqNameBreaker
                     SpecializedValue<AccelConstants>,           // Values that can be optimized
                     SpecializedValue<int>,                      // boolean
                     int,                                        // Name count limit (used as return condition)
-                    ArrayView<int>,                              // 1D array containing the found name (if found)
+                    ArrayView<int>,                             // 1D array containing the found name (if found)
                     ArrayView<uint>,
-                    ArrayView<uint>
+                    ArrayView<uint>,
+                    ArrayView<byte>,                            // Before chars (for bounding)
+                    ArrayView<byte>                             // After chars (for bounding)
                 >(HashCalculatorAccelerated.HashStringsBatchOptimized);
 
             var charsetBuffer = Accelerator.Allocate1D(Batches.CharsetBytes);
             var charsetIndexesBuffer = Accelerator.Allocate2DDenseX<int>(new LongIndex2D(BatchSize, BruteForceBatches.MaxGeneratedChars));
-            var suffixBytes = GetSuffixBytes();
-            var suffixBytesBuffer = Accelerator.Allocate1D(suffixBytes);
             int nameCount = (int)Math.Pow(Batches.Charset.Length, BatchCharCount);
             var cryptTableA = Accelerator.Allocate1D(StaticCryptTable.CryptTableA);
             var cryptTableB = Accelerator.Allocate1D(StaticCryptTable.CryptTableB);
+
+            var suffixBytes = GetStringBytes(Suffix);
+            var beforeBytes = GetStringBytes(Before);
+            var afterBytes = GetStringBytes(After);
+
+            var suffixBytesBuffer = Accelerator.Allocate1D(suffixBytes);
+            var beforeBytesBuffer = Accelerator.Allocate1D(beforeBytes);
+            var afterBytesBuffer = Accelerator.Allocate1D(afterBytes);
 
             // fill result array with -1
             int[] foundNameCharsetIndexes = new int[BruteForceBatches.MaxGeneratedChars];
@@ -191,6 +206,8 @@ namespace MpqNameBreaker
             optimizableConstants.prefixSeed2b = PrefixSeed2B;
             optimizableConstants.batchCharCount = BatchCharCount;
             optimizableConstants.suffixbytes = suffixBytes[0] != 0 ? suffixBytes.Length : 0;
+            optimizableConstants.beforebytes = beforeBytes[0] != 0 ? beforeBytes.Length : 0;
+            optimizableConstants.afterbytes = afterBytes[0] != 0 ? afterBytes.Length : 0;
             optimizableConstants.charsetLength = Batches.CharsetBytes.Length;
 
             if (optimizableConstants.suffixbytes > 0)
@@ -217,7 +234,9 @@ namespace MpqNameBreaker
                        nameCount,
                        foundNameCharsetIndexesBuffer.View,
                        cryptTableA.View,
-                       cryptTableB.View);
+                       cryptTableB.View,
+                       beforeBytesBuffer.View,
+                       afterBytesBuffer.View);
 
                 // Wait for the kernel to complete
                 Accelerator.Synchronize();
