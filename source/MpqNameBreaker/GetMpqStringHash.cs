@@ -1,36 +1,30 @@
-﻿using System.Text;
+﻿using CommandLine;
 using MpqNameBreaker.Mpq;
-using CommandLine;
+using System.Text;
 
 namespace MpqNameBreaker
 {
-    [Verb("MpqStringHash", HelpText = "Gets the MPQ hash associated with a name.")]
+    [Verb("hash", HelpText = "Gets the MPQ hash associated with a name.")]
     public class GetMpqStringHashCommand
     {
         [Value(0, HelpText = "Name to hash.", Required = true)]
         public string String { get; set; }
 
-        [Value(1, HelpText = "Hash type to use, either MpqHashNameA or MpqHashNameB.", Required = true)]
-        public HashType Type { get; set; }
-
         public static int ProcessRecord(GetMpqStringHashCommand opts)
         {
-            string strUpper;
-            byte[] strBytes;
-            uint hash;
-
             // Initialize hash calculator
             HashCalculator hashCalculator = new HashCalculator();
 
-            // Convert string to uppercase
-            strUpper = opts.String.ToUpper();
             // Get ASCII chars
-            strBytes = Encoding.ASCII.GetBytes(strUpper);
-            // Compute hash
-            hash = hashCalculator.HashString(strBytes, opts.Type);
+            var strBytes = Encoding.ASCII.GetBytes(opts.String.ToUpper());
+
+            // Hash string
+            var hashA = hashCalculator.HashString(strBytes, HashType.MpqHashNameA);
+            var hashB = hashCalculator.HashString(strBytes, HashType.MpqHashNameB);
 
             // Output hash to console
-            Console.WriteLine(hash);
+            Console.WriteLine($"{hashA:X8}");
+            Console.WriteLine($"{hashB:X8}");
 
             return 0;
         }
