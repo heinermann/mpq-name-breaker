@@ -11,7 +11,6 @@ namespace MpqNameBreaker.NameGenerator
         public string Charset { get; } = DefaultCharset;
         public byte[] CharsetBytes { get; }
 
-
         // Properties
         // The number of name seeds that will be generated
         public int BatchSize { get; }
@@ -52,11 +51,11 @@ namespace MpqNameBreaker.NameGenerator
             }
         }
 
-
         // Constructors
         public BruteForceBatches()
         {
-            CharsetBytes = Encoding.ASCII.GetBytes(Charset.ToUpper());
+            this.CharsetBytes = Encoding.ASCII.GetBytes(Charset.ToUpper());
+            Array.Sort(this.CharsetBytes);
         }
 
         public BruteForceBatches(int size, int charCount, string additionalChars = "", string charset = DefaultCharset)
@@ -67,6 +66,7 @@ namespace MpqNameBreaker.NameGenerator
 
             this.Charset = charset + additionalChars;
             this.CharsetBytes = Encoding.ASCII.GetBytes(Charset.ToUpper());
+            Array.Sort(this.CharsetBytes);
         }
 
         // Methods

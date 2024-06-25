@@ -67,12 +67,16 @@ namespace MpqNameBreaker.Mpq
             ArrayView<int> foundNameCharsetIndexes,  // 1D array containing the found name (if found)
             ArrayView<uint> cryptTableA,
             ArrayView<uint> cryptTableB,
-            ArrayView<byte> beforeBytes,            // Before chars (for bounding)
-            ArrayView<byte> afterBytes              // After chars (for bounding)
+            ArrayView<int> beforeIndexes,            // Hint name that comes before this (for bounding)
+            ArrayView<int> afterIndexes              // Hint name that comes after this (for bounding)
         )
         {
             // Brute force increment variables
             int generatedCharIndex = 0;
+
+            // Greatest number of characters matching a hint
+            int beforeHintIndex = -1;
+            int afterHintIndex = -1;
 
             // Hash precalculated seeds (after prefix)
             uint[] precalcSeeds1 = new uint[BruteForceBatches.MaxGeneratedChars];
@@ -96,10 +100,20 @@ namespace MpqNameBreaker.Mpq
             // Find the position of the last generated char
             for (int i = 1; i < BruteForceBatches.MaxGeneratedChars; ++i)
             {
-                if (charsetIndexes[index.X, i] == -1)
+                if (charsetIndexes[index, i] == -1)
                 {
                     generatedCharIndex = i - 1;
                     break;
+                }
+            }
+
+            // TODO: This can be moved to BruteForceBatches.cs to be done on the CPU, but probably not that important since it is outside the bottleneck
+            if (opt.Value.beforebytes > 0)
+            {
+                beforeHintIndex = Math.Min(opt.Value.beforebytes - 1, generatedCharIndex);
+                for (int i = 0; i <= beforeHintIndex; i++)
+                {
+                    charsetIndexes[index, i] = beforeIndexes[i];
                 }
             }
 
@@ -111,10 +125,11 @@ namespace MpqNameBreaker.Mpq
                 uint s2 = precalcSeeds2[precalcSeedIndex];
 
                 // Hash calculation
+                // TODO opt: test condition i <= generatedCharIndex without the charsetIdx test inside
                 for (int i = precalcSeedIndex; i < BruteForceBatches.MaxGeneratedChars; ++i)
                 {
                     // Retrieve the current char of the string
-                    Index1D charsetIdx = charsetIndexes[index.X, i];
+                    int charsetIdx = charsetIndexes[index, i];
 
                     if (charsetIdx == -1) // break if end of the string is reached
                         break;
@@ -158,10 +173,11 @@ namespace MpqNameBreaker.Mpq
                     s1 = opt.Value.prefixSeed1b;
                     s2 = opt.Value.prefixSeed2b;
 
+                    // TODO opt: test condition i <= generatedCharIndex without the charsetIdx test inside
                     for (int i = 0; i < BruteForceBatches.MaxGeneratedChars; ++i)
                     {
                         // Retrieve the current char of the string
-                        Index1D charsetIdx = charsetIndexes[index.X, i];
+                        int charsetIdx = charsetIndexes[index, i];
 
                         if (charsetIdx == -1) // break if end of the string is reached
                             break;
@@ -193,54 +209,96 @@ namespace MpqNameBreaker.Mpq
                     {
                         // Populate foundNameCharsetIndexes and return
                         for (int i = 0; i < BruteForceBatches.MaxGeneratedChars; ++i)
-                            foundNameCharsetIndexes[i] = charsetIndexes[index.X, i];
+                            foundNameCharsetIndexes[i] = charsetIndexes[index, i];
 
                         return;
                     }
                 }
 
+                // NOTE: Checks on opt.Value.beforebytes > 0 (and afterbytes) should be optimized out entirely if hints are unused
+
                 // Move to next name in the batch (brute force increment)
                 // If we are AT the last char of the charset
-                if (charsetIndexes[index.X, generatedCharIndex] == opt.Value.charsetLength - 1)
+                int chrIdx = charsetIndexes[index, generatedCharIndex];
+                if (chrIdx == opt.Value.charsetLength - 1 
+                    || (opt.Value.afterbytes > 0 
+                    && generatedCharIndex < opt.Value.afterbytes 
+                    && generatedCharIndex == afterHintIndex 
+                    && chrIdx == afterIndexes[generatedCharIndex]))
                 {
                     // Go through all the charset indexes in reverse order
                     int stopValue = generatedCharIndex - opt.Value.batchCharCount + 1;
                     if (firstBatch != 0 || stopValue < 0)
                         stopValue = 0;
 
-                    if (generatedCharIndex > stopValue)
+                    if (generatedCharIndex >= stopValue)
                     {
-                        bool increaseNameSize = false;
+                        int numCharsReset = 0;
                         for (int i = generatedCharIndex; i >= stopValue; --i)
                         {
                             // Retrieve the current char of the string
-                            Index2D idx = new Index2D(index.X, i);
+                            Index2D idx = new Index2D(index, i);
 
                             // If we are at the last char of the charset then go back to the first char
-                            if (charsetIndexes[idx] == opt.Value.charsetLength - 1)
+                            if (charsetIndexes[idx] == opt.Value.charsetLength - 1
+                                || (opt.Value.afterbytes > 0
+                                && i < opt.Value.afterbytes
+                                && i <= afterHintIndex
+                                && charsetIndexes[idx] == afterIndexes[i]))
                             {
+                                numCharsReset++;
                                 charsetIndexes[idx] = 0;
-
-                                if (i == 0)
-                                    increaseNameSize = true;
-
-                                // Go back in the precalc seeds (to recalculate since the char changed)
-                                if (precalcSeedIndex > 0)
-                                    precalcSeedIndex--;
+                                if (opt.Value.afterbytes > 0)
+                                {
+                                    afterHintIndex = i - 1;
+                                }
                             }
                             // If we are not at the last char of the charset then move to next char
                             else
                             {
                                 charsetIndexes[idx]++;
+                                if (opt.Value.beforebytes > 0 && beforeHintIndex == i)
+                                {
+                                    beforeHintIndex--;
+                                }
+                                if (opt.Value.afterbytes > 0 && i < opt.Value.afterbytes && afterHintIndex == i - 1 && charsetIndexes[idx] == afterIndexes[i])
+                                {
+                                    afterHintIndex++;
+                                }
                                 break;
                             }
                         }
 
-                        if (increaseNameSize)
+                        // Go back in the precalc seeds (to recalculate since the char changed)
+                        precalcSeedIndex -= numCharsReset;
+                        if (precalcSeedIndex < 0) precalcSeedIndex = 0;
+
+                        // When numCharsReset is equal to the number of chars total (we hit the max iterations for the string length)
+                        if (numCharsReset == generatedCharIndex)
                         {
                             // Increase name size by one char
                             generatedCharIndex++;
-                            charsetIndexes[index.X, generatedCharIndex] = 0;
+                            if (opt.Value.beforebytes > 0)
+                            {
+                                // initialize new indexes with before hint
+                                beforeHintIndex = Math.Min(opt.Value.beforebytes - 1, generatedCharIndex);
+                                for (int i = 0; i <= beforeHintIndex; i++)
+                                {
+                                    charsetIndexes[index, i] = beforeIndexes[i];
+                                }
+                            }
+                            else
+                            {
+                                charsetIndexes[index, generatedCharIndex] = 0;
+                            }
+                            if (opt.Value.afterbytes > 0)
+                            {
+                                afterHintIndex = -1;
+                                for (int i = 0; i <= Math.Min(opt.Value.afterbytes - 1, generatedCharIndex) && charsetIndexes[index, i] == afterIndexes[i]; i++)
+                                {
+                                    afterHintIndex++;
+                                }
+                            }
                         }
                     }
                 }
@@ -248,7 +306,16 @@ namespace MpqNameBreaker.Mpq
                 else
                 {
                     // Move to next char
-                    charsetIndexes[index.X, generatedCharIndex]++;
+                    int chr = ++charsetIndexes[index, generatedCharIndex];
+                    if (opt.Value.beforebytes > 0 && beforeHintIndex == generatedCharIndex)
+                    {
+                        beforeHintIndex--;
+                    }
+                    // TODO: potential optimization, make before/afterIndexes fixed size to match charsetIndexes and eliminate an extra bounds comparison
+                    if (opt.Value.afterbytes > 0 && generatedCharIndex < opt.Value.afterbytes && afterHintIndex == generatedCharIndex - 1 && chr == afterIndexes[generatedCharIndex])
+                    {
+                        afterHintIndex++;
+                    }
                 }
             }
         }

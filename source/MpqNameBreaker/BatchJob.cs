@@ -155,6 +155,48 @@ namespace MpqNameBreaker
             return result;
         }
 
+        private int[] GetStringIndicesBefore(string str)
+        {
+            int[] result;
+            if (str.Length > 0)
+            {
+                result = Encoding.ASCII.GetBytes(str.ToUpper())
+                    .Select(b => {
+                        int result = Array.FindIndex(Batches.CharsetBytes, 0, chr => chr >= b);
+                        if (result == -1) result = Batches.CharsetBytes.Length - 1;
+                        return result;
+                    })
+                    .ToArray();
+            }
+            else
+            {
+                result = new int[1];
+                result[0] = -1;
+            }
+            return result;
+        }
+
+        private int[] GetStringIndicesAfter(string str)
+        {
+            int[] result;
+            if (str.Length > 0)
+            {
+                result = Encoding.ASCII.GetBytes(str.ToUpper())
+                    .Select(b => {
+                        int result = Array.FindLastIndex(Batches.CharsetBytes, 0, chr => chr <= b);
+                        if (result == -1) result = 0;
+                        return result;
+                    })
+                    .ToArray();
+            }
+            else
+            {
+                result = new int[1];
+                result[0] = -1;
+            }
+            return result;
+        }
+
         private void JobThread()
         {
             // Load kernel (GPU function)
@@ -170,8 +212,8 @@ namespace MpqNameBreaker
                     ArrayView<int>,                             // 1D array containing the found name (if found)
                     ArrayView<uint>,
                     ArrayView<uint>,
-                    ArrayView<byte>,                            // Before chars (for bounding)
-                    ArrayView<byte>                             // After chars (for bounding)
+                    ArrayView<int>,                             // Hint name that comes before this (for bounding)
+                    ArrayView<int>                              // Hint name that comes after this (for bounding)
                 >(HashCalculatorAccelerated.HashStringsBatchOptimized);
 
             var charsetBuffer = Accelerator.Allocate1D(Batches.CharsetBytes);
@@ -181,12 +223,10 @@ namespace MpqNameBreaker
             var cryptTableB = Accelerator.Allocate1D(StaticCryptTable.CryptTableB);
 
             var suffixBytes = GetStringBytes(Suffix);
-            var beforeBytes = GetStringBytes(Before);
-            var afterBytes = GetStringBytes(After);
 
             var suffixBytesBuffer = Accelerator.Allocate1D(suffixBytes);
-            var beforeBytesBuffer = Accelerator.Allocate1D(beforeBytes);
-            var afterBytesBuffer = Accelerator.Allocate1D(afterBytes);
+            var beforeIndicesBuffer = Accelerator.Allocate1D(GetStringIndicesBefore(Before));
+            var afterIndicesBuffer = Accelerator.Allocate1D(GetStringIndicesAfter(After));
 
             // fill result array with -1
             int[] foundNameCharsetIndexes = new int[BruteForceBatches.MaxGeneratedChars];
@@ -205,9 +245,9 @@ namespace MpqNameBreaker
             optimizableConstants.prefixSeed1b = PrefixSeed1B;
             optimizableConstants.prefixSeed2b = PrefixSeed2B;
             optimizableConstants.batchCharCount = BatchCharCount;
-            optimizableConstants.suffixbytes = suffixBytes[0] != 0 ? suffixBytes.Length : 0;
-            optimizableConstants.beforebytes = beforeBytes[0] != 0 ? beforeBytes.Length : 0;
-            optimizableConstants.afterbytes = afterBytes[0] != 0 ? afterBytes.Length : 0;
+            optimizableConstants.suffixbytes = Suffix.Length;
+            optimizableConstants.beforebytes = Before.Length;
+            optimizableConstants.afterbytes = After.Length;
             optimizableConstants.charsetLength = Batches.CharsetBytes.Length;
 
             if (optimizableConstants.suffixbytes > 0)
@@ -235,8 +275,8 @@ namespace MpqNameBreaker
                        foundNameCharsetIndexesBuffer.View,
                        cryptTableA.View,
                        cryptTableB.View,
-                       beforeBytesBuffer.View,
-                       afterBytesBuffer.View);
+                       beforeIndicesBuffer.View,
+                       afterIndicesBuffer.View);
 
                 // Wait for the kernel to complete
                 Accelerator.Synchronize();
